@@ -7,6 +7,8 @@ from itertools import product
 import numpy as np
 from copy import deepcopy
 from random import choice, uniform, randint
+from pysat.solvers import Solver, Minisat22
+import pycosat
 
 class Formula :
 
@@ -590,3 +592,260 @@ def tseitin(A):
     B = [[[atomo]]] + [a_clausal(x) for x in L]
     B = [val for sublist in B for val in sublist]
     return B
+
+
+#FUNCIONES DE ALGORITMOS SAT
+
+#FILTRADO para DPLL, WalkSAT y MiniSAT22
+def filtro(I, formula_original):
+    """
+    Filtra las variables de Tseitin, dejando solo las originales.
+    Maneja casos donde la interpretación es None (Insatisfacible).
+    """
+    if I is None or I == {}:
+        return I
+
+    #Convertimos a set para búsquedas instantáneas (O(1)) para cientos de variables de Tseitin
+    letras_reales = set(inorder_to_tree(formula_original).letras())
+    
+    #Construimos el nuevo diccionario filtrado
+    return {var: val for var, val in I.items() if var in letras_reales}
+
+    #Uso:
+    #I_final = filtro(I_res, F)
+
+#TABLEAUX
+
+def primero_anchura(nodo):
+    estado = nodo
+    res = estado.es_hoja()
+    if res == 'cerrada':
+        return None
+    elif res == 'abierta':
+        return estado.interp()
+    frontera = [estado]
+    while len(frontera) > 0:
+        estado = frontera.pop(0) 
+        hijos = estado.expandir()
+        for a in hijos:
+            if a != None:
+                res = a.es_hoja()
+                if res == 'abierta':
+                    return a.interp()
+                elif res == None:
+                    frontera.append(a)
+    return None
+
+def primero_profundidad(nodo):
+    estado = nodo
+    res = estado.es_hoja()
+    if res == 'cerrada':
+        return None
+    elif res == 'abierta':
+        return estado.interp()
+    frontera = [estado]
+    while len(frontera) > 0:
+        estado = frontera.pop() 
+        hijos = estado.expandir()
+        for a in hijos:
+            if a != None:
+                res = a.es_hoja()
+                if res == 'abierta':
+                    return a.interp()
+                elif res == None:
+                    frontera.append(a)
+    return None
+
+def backtracking(nodo):
+    estado = nodo
+    res = estado.es_hoja()
+    if res == 'cerrada':
+        return None
+    elif res == 'abierta':
+        return estado.interp()
+    hijos = estado.expandir()
+    for hijo in hijos:
+        if hijo != None:
+            res = backtracking(hijo)
+            if res is not None:
+                return res
+    return None
+
+#Funciones para DPLL
+def complemento_dpll(L):
+    return L[1:] if L.startswith('-') else '-' + L
+
+def eliminar_literal(S, l):
+    # S1 keeps only clauses where l is NOT present (because those clauses are satisfied)
+    S1 = [c for c in S if l not in c]
+    lc = complemento_dpll(l)
+    # Then, remove the complement lc from the remaining clauses
+    return [[p for p in c if p != lc] for c in S1]
+
+def extender_I(I, L):
+    # Extract variable name (remove '-' if present)
+    var = L[1:] if L.startswith('-') else L
+    # Value is True if no '-', False if '-'
+    valor = not L.startswith('-')
+    I[var] = valor
+    return I
+
+def unit_propagate(S, I):
+    """
+    Improved unit propagation that detects contradictions earlier.
+    """
+    S = [c[:] for c in S] # Shallow copy of clauses
+    changed = True
+    while changed:
+        changed = False
+        units = [c[0] for c in S if len(c) == 1]
+        for l in units:
+            var = l[1:] if l.startswith('-') else l
+            val = not l.startswith('-')
+            
+            if var in I:
+                if I[var] != val: return S, I, True # Contradiction found
+                continue
+            
+            I[var] = val
+            S = eliminar_literal(S, l)
+            changed = True
+            if not S: break
+    return S, I, False
+
+#DPLL + filtrado
+
+def dpll(F, S, I): #F: Fórmula original #S: Fórmula pero en Tseitin #I: Diccionario para modelo
+    #Una versión de DPLL que reduce overhead en memoria 
+    #1. Unit Propagation (Modifies I and S locally)
+    S, I, conflict = unit_propagate(S, I)
+    if conflict:
+        return "Insatisfacible", {}
+
+    #2. Casos base
+    if len(S) == 0:
+        return "Satisfacible", I
+    if any(len(c) == 0 for c in S):
+        return "Insatisfacible", {}
+
+    #3. Ramificación (Heuristic: pick a literal from the shortest clause)
+    #This is more efficient than purely random choice
+    S = sorted(S, key=len)
+    l = S[0][0]
+    lc = complemento_dpll(l)
+
+    # Path 1: Try literal l as True
+    res, new_I = dpll(F, eliminar_literal(S, l), extender_I(deepcopy(I), l))
+    if res == "Satisfacible":
+        I_final = filtro(new_I, F)
+        return res, I_final
+
+    # Path 2: Try literal l as False (its complement lc as True)
+    return dpll(F, eliminar_literal(S, lc), extender_I(deepcopy(I), lc))
+
+#Funciones para WalkSAT
+def complemento_walk(l):
+    if '-' in l:
+        return l[1:]
+    else:
+        return '-' + l
+
+def interpretacion_aleatoria(letrasp):
+    I = {p:randint(0,1)==1 for p in letrasp}
+    return I
+
+def flip_literal(I, l):
+    p = l[-1]
+    valor = False if I[p] else True
+    Ip = deepcopy(I)
+    Ip[p] = valor
+    return Ip
+
+#WalkSAT + filtrado
+class WalkSatEstado():
+    
+    def __init__(self, S):
+        self.S = S
+        self.letrasp = list(set([l[-1] for C in self.S for l in C]))
+        self.I = interpretacion_aleatoria(self.letrasp)
+        self.I_lits = set([p for p in self.letrasp if self.I[p]] + ['-'+p for p in self.letrasp if not self.I[p]])
+        self.clausulas_sat = [C for C in self.S if any((True for x in self.I_lits if x in C))]
+        self.clausulas_unsat = [C for C in self.S if C not in self.clausulas_sat]
+
+    def actualizar(self, I):
+        self.I = I
+        self.I_lits = set([p for p in self.letrasp if self.I[p]] + ['-'+p for p in self.letrasp if not self.I[p]])
+        self.clausulas_sat = [C for C in self.S if any((True for x in self.I_lits if x in C))]
+        self.clausulas_unsat = [C for C in self.S if C not in self.clausulas_sat]
+       
+    def SAT(self):
+        return len(self.clausulas_unsat) == 0
+
+    def break_count(self, l):
+        if l in self.I_lits:
+            lit = l
+        else:
+            lit = complemento_walk(l)
+        clausulas_break_count = [C for C in self.clausulas_sat if set(C).intersection(self.I_lits)=={lit}]
+        return len(clausulas_break_count)
+    
+def walkSAT(F, A, max_flips=1000, max_tries=100, p=.2):
+    w = WalkSatEstado(A)
+    for i in range(max_tries):
+        w.actualizar(interpretacion_aleatoria(w.letrasp))
+        for j in range(max_flips):
+            if w.SAT():
+                w.I
+                I_final = filtro(w.I, F)
+                return I_final
+            C = choice(w.clausulas_unsat)
+            breaks = sorted([(l,w.break_count(l)) for l in C], key=lambda x: x[1])
+            min_breaks = breaks[0]
+            if min_breaks[1] == 0:
+                v = min_breaks[0]
+            else:
+                if uniform(0,1) < p:
+                    assert(len(C)>0), f"{C}"
+                    v = choice(C)
+                else:
+                    v = min_breaks[0]
+            I = flip_literal(w.I, v)
+            w.actualizar(I)
+    return None
+
+#MiniSAT22 + filtrado
+def MiniSAT(A):
+    
+    def lit_numero(l):
+        if '-' in l:
+            return -(ord(l[1:]) - 255)
+        else:
+            return ord(l) - 255
+    
+    def clausula_numero(C):
+        return [lit_numero(l) for l in C]
+
+    def fnc_numero(S):
+        return [clausula_numero(C) for C in S]
+
+    def obtener_int(mod):
+        return {chr(255 + abs(n)):n>0 for n in mod}
+    
+    def obtener_numeros(S):
+        lista_plana = [abs(x) for sublist in S for x in sublist]
+        lista_plana = list(set(lista_plana))
+        return lista_plana
+        
+    S = tseitin(A)
+    S = fnc_numero(S)
+    numeros = obtener_numeros(S)
+    solucion = pycosat.solve(S)
+    solucion = [x for x in solucion if abs(x) in numeros]
+    solucion = obtener_int(solucion)
+    with Minisat22(bootstrap_with=S) as m:
+        if m.solve():
+            I = obtener_int(m.get_model())
+            I_final = filtro(I, A)
+            return 'Satisfacible', I_final
+        else:
+            return 'Insatisfacible', {}
