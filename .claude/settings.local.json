@@ -4,7 +4,8 @@
       "Bash(jupyter nbconvert *)",
       "Bash(python -c \"import json; nb = json.load\\(open\\(r'C:\\\\Proyectos\\\\ADAM\\\\L-gica-\\\\Proyecto_DPLL.ipynb', 'r', encoding='utf-8'\\)\\); [print\\('---CELL', i, c['cell_type']\\); print\\(''.join\\(c['source']\\)[:2000]\\) for i, c in enumerate\\(nb['cells']\\)]\")",
       "Bash(python -c ' *)",
-      "Bash(python *)"
+      "Bash(python *)",
+      "Bash(awk '{print $5, $9}')"
     ]
   }
 }

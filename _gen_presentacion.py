@@ -4,9 +4,17 @@ Estructura inspirada en G06_PRESENTACION.pdf (Beamer-like).
 Paleta MONOCROMA AZUL (varias intensidades del mismo color).
 
 No modifica ningun archivo fuente del proyecto.
+
+Version 3 (actualizada): basada en la v1, incorpora
+  - una diapositiva nueva que explica que es un hexagrama (figura geometrica),
+  - una diapositiva con la implementacion real de los SAT-solvers en Logica.py
+    (filtro, dpll con unit_propagate, MiniSAT via pycosat + Minisat22),
+  - los tiempos REALES medidos en los notebooks (Samuel) para los 5 solvers,
+  - numeracion de pagina automatica.
+
 Produce:
-  - Presentacion_Hexagrama.pptx
-  - _hexagrama_figura.png (figura auxiliar generada con matplotlib)
+  - Presentacion_Hexagrama_v3.pptx
+  - _hexagrama_figura.png / _hexagrama_solucion.png (figuras matplotlib)
 """
 
 import os
@@ -105,12 +113,17 @@ AUTORES = "Samuel A. Galindo  ·  John S. Valbuena  ·  Alejandro Jimenez"
 TITULO_CORTO = "Hexagrama Magico"
 
 # Contenido del seminario (para el footer page X/Y)
-TOTAL_SLIDES_ESTIMADO = 46  # se actualiza al final
+TOTAL_SLIDES_ESTIMADO = 53  # actualizado: deck v3 con slide de hexagrama + slide de SAT-solvers
+
+# Contador automatico de pagina: se incrementa una vez por slide (en fondo()),
+# asi insertar/eliminar diapositivas no obliga a renumerar a mano.
+_PAGINA = [0]
 
 # =============================================================
 # HELPERS
 # =============================================================
 def fondo(slide, color=B00):
+    _PAGINA[0] += 1
     bg = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, 0, 0, SW, SH)
     bg.line.fill.background()
     bg.fill.solid(); bg.fill.fore_color.rgb = color
@@ -172,9 +185,9 @@ def header_bar(slide, titulo, n_pag, total_pag=None):
          titulo, size=22, color=B80, bold=True, anchor=MSO_ANCHOR.MIDDLE)
     if total_pag is None:
         total_pag = TOTAL_SLIDES_ESTIMADO
-    # numero de pagina
+    # numero de pagina (automatico: usa el contador global)
     caja(slide, Inches(12.0), Inches(0.16), Inches(1.2), Inches(0.45),
-         f"{n_pag} / {total_pag}", size=11, color=B60, italic=True,
+         f"{_PAGINA[0]} / {total_pag}", size=11, color=B60, italic=True,
          align=PP_ALIGN.RIGHT, anchor=MSO_ANCHOR.MIDDLE)
 
 def footer_bar(slide):
@@ -385,9 +398,9 @@ def slide_seccion(num, total, titulo, n_pag, subtitulo=None):
         caja(s, Inches(5.0), Inches(3.2), Inches(7.8), Inches(2.0),
              subtitulo, size=18, color=B60, italic=True,
              align=PP_ALIGN.LEFT, anchor=MSO_ANCHOR.MIDDLE)
-    # numero en footer
+    # numero en footer (automatico)
     caja(s, Inches(12.0), Inches(7.05), Inches(1.2), Inches(0.3),
-         f"{n_pag} / {TOTAL_SLIDES_ESTIMADO}", size=10, color=B50, italic=True,
+         f"{_PAGINA[0]} / {TOTAL_SLIDES_ESTIMADO}", size=10, color=B50, italic=True,
          align=PP_ALIGN.RIGHT)
     return s
 
@@ -395,7 +408,38 @@ def slide_seccion(num, total, titulo, n_pag, subtitulo=None):
 # SECCION 1 - BIENVENIDA / INTRODUCCION AL PROBLEMA
 # =============================================================
 slide_seccion(1, 9, "Introduccion al Problema", 3,
-              "Que es un hexagrama magico y por que merece ser modelado\ncon logica proposicional.")
+              "Que es un hexagrama, que lo vuelve magico y por que\nmerece ser modelado con logica proposicional.")
+
+# ---- SLIDE: Que es un hexagrama? (concepto geometrico, antes de la version magica) ----
+s = prs.slides.add_slide(BLANK); fondo(s, B00)
+header_bar(s, "Que es un Hexagrama?", 0); footer_bar(s)
+
+caja(s, Inches(0.5), Inches(1.0), Inches(7.4), Inches(0.5),
+     "La figura geometrica:", size=18, color=B80, bold=True)
+caja(s, Inches(0.5), Inches(1.55), Inches(7.4), Inches(3.6),
+     bullet_list([
+       "Es una estrella de seis puntas: una de las figuras geometricas mas antiguas y reconocibles.",
+       "Se forma al superponer DOS triangulos equilateros iguales, uno apuntando hacia arriba y otro hacia abajo.",
+       "En geometria es el poligono estrellado { 6 / 2 }: 6 vertices que se unen saltando de 2 en 2.",
+       "Al cruzarse los triangulos aparece un hexagono regular en el centro y 6 puntas triangulares alrededor.",
+       "Tambien se le conoce como Estrella de David o Sello de Salomon, con fuerte carga simbolica en varias culturas.",
+     ], size=13))
+
+caja_titulada(s, Inches(0.5), Inches(5.25), Inches(7.4), Inches(1.65),
+              "Hexagrama  vs.  Hexagrama magico",
+              [
+                "Hexagrama = la figura (la estrella de 6 puntas).",
+                "Hexagrama magico = colocar los numeros 1..12 en sus 12 casillas de modo que las 6 lineas rectas sumen todas lo mismo (M = 26).",
+                "Eso ultimo es lo que formalizamos y resolvemos en este proyecto.",
+              ],
+              header_color=B70, body_color=B05, body_size=12)
+
+s.shapes.add_picture(FIG_HEX, Inches(8.2), Inches(1.4),
+                     width=Inches(4.6), height=Inches(4.6))
+caja(s, Inches(8.2), Inches(6.05), Inches(4.6), Inches(0.7),
+     "Las 12 casillas del hexagrama: 6 en las puntas y 6 en los cruces interiores. "
+     "Cada casilla pertenece exactamente a dos lineas rectas.",
+     size=11, color=B50, italic=True, align=PP_ALIGN.CENTER, line_spacing=1.15)
 
 # ---- SLIDE 4: El hexagrama magico ----
 s = prs.slides.add_slide(BLANK); fondo(s, B00)
@@ -732,7 +776,7 @@ caja(s, Inches(0.5), Inches(1.0), Inches(6.0), Inches(0.5),
 
 mods = [
     ("Logica.py",
-     "Clases Formula, Letra, Negacion, Binario. Clase Descriptor (chr/ord). Algoritmos: SATtabla, SATtableaux. Transformaciones a FNC: eliminar_imp, DeMorgan, distribuir_o_en_y, fnc(), tseitin(). Iteradores: Ytoria, Otoria, nodos_tableaux."),
+     "Clases Formula, Letra, Negacion, Binario y Descriptor (chr/ord). Transformaciones a FNC: eliminar_imp, DeMorgan, distribuir_o_en_y, fnc(), tseitin(). Los CINCO solvers viven aqui: SATtabla, tableaux (primero_anchura / primero_profundidad / backtracking), dpll (con unit_propagate), walkSAT (clase WalkSatEstado) y MiniSAT (pycosat + Minisat22). Funcion filtro() para quitar variables de Tseitin."),
     ("Hexagrama_arr.py",
      "Clase Numero(N=12, C=12). Implementa regla1..regla4 devolviendo strings inorder. Define Ytoria_balanceada y Otoria_balanceada (divide-y-venceras). Metodo visualizar(I) que pinta el hexagrama con matplotlib."),
     ("Proyecto_*.ipynb",
@@ -994,6 +1038,65 @@ caja_titulada(s, Inches(0.5), Inches(6.0), Inches(12.3), Inches(1.05),
               "Validar la formalizacion del hexagrama y comprender ventajas y limitaciones de cada estrategia, aplicando los cinco SAT solvers a cada regla por separado y a la conjuncion total.",
               header_color=B70, body_color=B05, body_size=12)
 
+# ---- SLIDE: Implementacion de los SAT-solvers en Logica.py ----
+s = prs.slides.add_slide(BLANK); fondo(s, B00)
+header_bar(s, "Implementacion de los SAT-Solvers en Logica.py", 0); footer_bar(s)
+caja(s, Inches(0.5), Inches(0.95), Inches(12.3), Inches(0.5),
+     "Las cinco estrategias se implementaron en el modulo. Tres piezas clave: filtrado de Tseitin, DPLL con propagacion unitaria y MiniSAT via PySAT.",
+     size=12.5, color=B70)
+
+bloque_codigo(s, Inches(0.5), Inches(1.55), Inches(6.15), Inches(5.3),
+              titulo="filtro()  +  dpll()",
+              lineas=[
+                  "def filtro(I, formula_original):",
+                  "    if I is None or I == {}:",
+                  "        return I",
+                  "    reales = set(inorder_to_tree(",
+                  "        formula_original).letras())",
+                  "    return {v: val for v, val in I.items()",
+                  "            if v in reales}",
+                  "",
+                  "def dpll(F, S, I):",
+                  "    S, I, conf = unit_propagate(S, I)",
+                  "    if conf: return 'Insatisfacible', {}",
+                  "    if len(S) == 0: return 'Satisfacible', I",
+                  "    if any(len(c)==0 for c in S):",
+                  "        return 'Insatisfacible', {}",
+                  "    S = sorted(S, key=len)   # clausula corta",
+                  "    l = S[0][0]; lc = complemento_dpll(l)",
+                  "    r, I2 = dpll(F, eliminar_literal(S, l),",
+                  "                 extender_I(deepcopy(I), l))",
+                  "    if r == 'Satisfacible':",
+                  "        return r, filtro(I2, F)",
+                  "    return dpll(F, eliminar_literal(S, lc),",
+                  "                extender_I(deepcopy(I), lc))",
+              ])
+
+bloque_codigo(s, Inches(6.85), Inches(1.55), Inches(5.95), Inches(5.3),
+              titulo="MiniSAT()  (pycosat + Minisat22)",
+              lineas=[
+                  "from pysat.solvers import Minisat22",
+                  "import pycosat",
+                  "",
+                  "def MiniSAT(A):",
+                  "    def lit_numero(l):",
+                  "        return (-(ord(l[1:]) - 255)",
+                  "                if '-' in l",
+                  "                else ord(l) - 255)",
+                  "    # letra -> entero (codificacion DIMACS)",
+                  "    S = fnc_numero(tseitin(A))",
+                  "    with Minisat22(bootstrap_with=S) as m:",
+                  "        if m.solve():",
+                  "            I = obtener_int(m.get_model())",
+                  "            return 'Satisfacible', filtro(I, A)",
+                  "        return 'Insatisfacible', {}",
+                  "",
+                  "# WalkSAT: clase WalkSatEstado con",
+                  "# break_count() y clausulas_sat/unsat;",
+                  "# tableaux: primero_anchura,",
+                  "# primero_profundidad, backtracking.",
+              ])
+
 # ---- generador slide-solver ----
 def slide_solver(pag, num, nombre, descripcion, ventajas, desventajas, observacion=None):
     s = prs.slides.add_slide(BLANK); fondo(s, B00)
@@ -1112,7 +1215,7 @@ slide_solver(
       "Atrapamiento en optimos locales.",
       "Inconsistente en problemas estructurados.",
     ],
-    "En el hexagrama, WalkSAT tarda 12+ horas en R3 y 14+ horas en R4 porque los optimos locales son muchos y las restricciones de unicidad fuerzan flips que destruyen progreso."
+    "Medido: WalkSAT resuelve R2 en 0.84 s, pero en R3 corre 12 h 25 min SIN encontrar solucion y en R4 se interrumpe a las 14 h 43 min. Los optimos locales y las restricciones de unicidad fuerzan flips que destruyen el progreso."
 )
 
 slide_solver(
@@ -1135,7 +1238,7 @@ slide_solver(
       "Overhead computacional en problemas chicos.",
       "Configuracion de parametros no obvia.",
     ],
-    "En el hexagrama, MiniSAT22 resuelve TODAS las reglas a la vez en aproximadamente 30 milisegundos."
+    "Medido: MiniSAT22 resuelve R2, R3 y R4 en milisegundos; el cuello de botella es la Regla 1 (suma=26), que toma 19.1 s. La conjuncion de las 4 reglas se resuelve en 33.1 s."
 )
 
 # ---- SLIDE 31: sintesis comparativa ----
@@ -1181,7 +1284,7 @@ caja(s, Inches(0.8), Inches(4.6), Inches(12.0), Inches(0.4),
 
 caja_titulada(s, Inches(0.8), Inches(5.3), Inches(11.7), Inches(1.5),
               "Conclusion",
-              "MiniSAT22 emerge como el enfoque mas robusto al combinar busqueda sistematica completa (CDCL) con aprendizaje adaptativo de conflictos. Es 4-5 ordenes de magnitud mas rapido que cualquier metodo academico para este problema.",
+              "MiniSAT22 emerge como el enfoque mas robusto al combinar busqueda sistematica completa (CDCL) con aprendizaje adaptativo de conflictos. Resuelve la conjuncion en 33 s, hasta 3 ordenes de magnitud mas rapido que los metodos academicos que corren horas sin terminar.",
               header_color=B70, body_color=B05, body_size=13)
 
 
@@ -1280,8 +1383,8 @@ slide_resultado_solver(
       "Espacio: 2^240 ≈ 10^72.",
       "Complejidad: O(2^n).",
     ],
-    "11 h 06 min (Regla 4)",
-    "Estado: Interrumpido en conjuncion total",
+    "R1: 116 ms  ·  R4: 11 h 06 min",
+    "R1 y R2 resueltas; R4 interrumpida a las 11 h, conjuncion en timeout",
     B50,
     "Simple, completo, ideal para entender el problema.",
     "Inviable para problemas con muchos atomos.",
@@ -1295,12 +1398,12 @@ slide_resultado_solver(
       "Tres estrategias: anchura, profundidad, backtracking.",
       "Poda de ramas contradictorias.",
     ],
-    "10 h 32 min (profundidad, todas las reglas)",
-    "Estado: 6 h 22 min con backtracking",
+    "Profundidad - todas: 10 h 42 min",
+    "Backtracking - todas: 6 h 22 min  ·  R4: 1 min 18 s, R1: 2.4 s",
     B50,
     "Deteccion temprana de conflictos.",
     "Complejidad exponencial persiste.",
-    "Figura: resultado obtenido para una regla individual."
+    "Truco: fijar una linea (condicion inicial) acelera la busqueda."
 )
 
 slide_resultado_solver(
@@ -1310,8 +1413,8 @@ slide_resultado_solver(
       "Eliminacion de literales puros (implicita).",
       "Backtracking cronologico con heuristica de clausula corta.",
     ],
-    "Segundos (con Tseitin + UP)",
-    "Estado: Completado para reglas individuales",
+    "R1: 2 min 08 s  ·  Conjuncion: 4 min 58 s",
+    "Completado en TODAS las reglas (R2: 86 ms, R3: 2.5 s, R4: 9.9 s)",
     B70,
     "Reduce dramaticamente el espacio de busqueda.",
     "Backtracking cronologico sin aprendizaje.",
@@ -1325,12 +1428,12 @@ slide_resultado_solver(
       "Movimientos aleatorios y greedy.",
       "Multiples reinicios.",
     ],
-    "14 h 43 min (Regla 4)",
-    "Estado: Interrumpido / Optimos locales",
+    "R3: 12 h 25 min  ·  R4: 14 h 43 min",
+    "R2 resuelta en 0.84 s; R3 sin solucion, R4 interrumpida (optimos locales)",
     B40,
     "Excelente en instancias aleatorias.",
     "Incompleto, no garantiza convergencia.",
-    "Figura: asignacion parcial encontrada en R6."
+    "Figura: R2 resuelta; R3 y R4 no convergen."
 )
 
 slide_resultado_solver(
@@ -1340,12 +1443,12 @@ slide_resultado_solver(
       "Backjumping no cronologico.",
       "Heuristica VSIDS y watched literals.",
     ],
-    "≈ 30 milisegundos",
-    "Estado: Completado para todas las reglas",
+    "R1: 19.1 s  ·  Conjuncion: 33.1 s",
+    "Completado en TODAS las reglas (R2-R4 en milisegundos)",
     B70,
     "Memoria de conflictos evita repeticiones.",
     "El mas eficiente: ordenes de magnitud por debajo de DPLL.",
-    "Figura: solucion optima en milisegundos."
+    "Figura: solucion optima de las 4 reglas en 33 s."
 )
 
 
@@ -1361,13 +1464,13 @@ header_bar(s, "Tabla Comparativa de Tiempos de Ejecucion", 40); footer_bar(s)
 
 headers = ["SAT Solver", "R1", "R2", "R3", "R4", "Conjuncion (R1..R4)", "Estado global"]
 rows = [
-    ("SATtabla",              "0.11 s",   "ms",       "10.7 s",      "11 h 06 min",  "Timeout (>24 h)", "Interrumpido"),
-    ("Tableaux - anchura",     "—",       "3 min 12s", "—",          "—",            "~ 0.09 s",        "Parcial"),
-    ("Tableaux - profundidad", "2.75 s",  "36 ms",     "—",          "—",            "10 h 42 min",     "Completado"),
-    ("Tableaux - backtracking","2.43 s",  "35 ms",     "—",          "—",            "6 h 22 min",      "Completado"),
-    ("DPLL",                   "segundos","ms",        "segundos",   "segundos",     "segundos",        "Completado"),
-    ("WalkSAT",                "2 h 01 min","0.43 s",  "12 h 25 min","14 h 43 min",  "0.09 s",          "Parcial"),
-    ("MiniSAT22 (CDCL)",       "ms",      "ms",        "ms",         "ms",           "~ 30 ms",         "Completado"),
+    ("SATtabla",              "116 ms",   "0.5 ms",   "timeout",    "11 h 06 min",  "Timeout (>24 h)", "Interrumpido"),
+    ("Tableaux - anchura",    "—",        "3 min 12s","—",          "—",            "—",               "Interrumpido"),
+    ("Tableaux - profundidad","2.75 s",   "100 ms",   "12.7 s",     "1 min 12 s",   "10 h 42 min",     "Completado"),
+    ("Tableaux - backtracking","2.43 s",  "35 ms",    "3.3 s",      "1 min 18 s",   "6 h 22 min",      "Completado"),
+    ("DPLL",                  "2 min 08 s","86 ms",   "2.51 s",     "9.95 s",       "4 min 58 s",      "Completado"),
+    ("WalkSAT",               "—",        "0.84 s",   "12 h 25 min","14 h 43 min",  "—",               "Parcial"),
+    ("MiniSAT22 (CDCL)",      "19.1 s",   "13 ms",    "413 ms",     "1.54 s",       "33.1 s",          "Completado"),
 ]
 table_x = Inches(0.4); table_y = Inches(1.3)
 col_widths = [Inches(2.6), Inches(1.3), Inches(1.0), Inches(1.4), Inches(1.5),
@@ -1402,13 +1505,13 @@ for i, row in enumerate(rows):
         x += col_widths[j]
 
 caja(s, Inches(0.4), Inches(5.0), Inches(12.5), Inches(0.4),
-     "Cuadro: tiempos medidos con %%time de Jupyter sobre cada celda. ms = decenas de milisegundos.",
+     "Cuadro: Wall time real medido con %%time de Jupyter sobre cada celda.  '—' = no medido / no termino;  'timeout' = supero el limite de 24 h.",
      size=10, color=B50, italic=True, align=PP_ALIGN.CENTER)
 
 caja_titulada(s, Inches(0.4), Inches(5.6), Inches(12.5), Inches(1.5),
               "Diferencia Critica",
-              "3 a 5 ordenes de magnitud entre los metodos exitosos (DPLL, MiniSAT22) y los interrumpidos por timeout (SATtabla, WalkSAT). La eleccion del solver determina si el problema es resoluble en segundos o intratable.",
-              header_color=B70, body_color=B05, body_size=13)
+              "Hasta 3 ordenes de magnitud entre los metodos exitosos (DPLL: ~5 min; MiniSAT22: 33 s en la conjuncion) y los interrumpidos por timeout (SATtabla, WalkSAT, que corren horas sin terminar). Dato clave: la Regla 1 (suma=26) es el cuello de botella incluso para los solvers eficientes (DPLL 2 min, MiniSAT 19 s); el resto de reglas se resuelven en milisegundos.",
+              header_color=B70, body_color=B05, body_size=12.5)
 
 # ---- SLIDE 41: analisis convergencia ----
 s = prs.slides.add_slide(BLANK); fondo(s, B00)
@@ -1418,11 +1521,11 @@ caja(s, Inches(0.5), Inches(1.0), Inches(12.3), Inches(0.5),
      "Umbrales de complejidad observados:", size=16, color=B80, bold=True)
 
 datos_umbral = [
-    ("SATtabla",         "Falla con ≥ 4 reglas combinadas (R4 individual ya toma 11h)",  B50),
-    ("Tableaux",         "Falla con la conjuncion total (10h+ con profundidad)",              B40),
-    ("DPLL",             "Exito en todas las combinaciones (1-4)",                           B70),
-    ("WalkSAT",          "Falla con R3 y R4 individuales (atrapado en optimos locales)",     B40),
-    ("MiniSAT22",        "Exito en todas las combinaciones, en decenas de milisegundos",     B70),
+    ("SATtabla",         "Resuelve R1/R2 en ms, pero R4 corre 11 h sin terminar; conjuncion en timeout",  B50),
+    ("Tableaux",         "Resuelve cada regla, pero la conjuncion total toma 6-10 h (backtracking / profundidad)", B40),
+    ("DPLL",             "Exito en todas las reglas y en la conjuncion (~5 min); R1 es la mas costosa (2 min)", B70),
+    ("WalkSAT",          "Falla en R3 y R4 individuales: 12-15 h sin solucion (optimos locales)",     B40),
+    ("MiniSAT22",        "Exito en todo; conjuncion en 33 s, dominada por R1 (19 s); R2-R4 en ms",     B70),
 ]
 y = Inches(1.7)
 for nom, txt, col in datos_umbral:
@@ -1718,11 +1821,11 @@ caja(s, Inches(0.5), Inches(6.9), Inches(12.3), Inches(0.3),
 
 
 # =============================================================
-out = os.path.join(BASE, 'Presentacion_Hexagrama.pptx')
+out = os.path.join(BASE, 'Presentacion_Hexagrama_v3.pptx')
 try:
     prs.save(out)
 except PermissionError:
-    out = os.path.join(BASE, 'Presentacion_Hexagrama_v2.pptx')
+    out = os.path.join(BASE, 'Presentacion_Hexagrama_v3_alt.pptx')
     prs.save(out)
 print("OK:", out)
 print(f"Total slides generadas: {len(prs.slides)}")
